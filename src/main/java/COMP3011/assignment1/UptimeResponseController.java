@@ -19,6 +19,6 @@ public class UptimeResponseController {
     public record UptimeResponse(
         String utcServerStart,
         String utcNow,
-        double serverUptimeSecond
+        double serverUptimeSeconds
     ) {}
 }
