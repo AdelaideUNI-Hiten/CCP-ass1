@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Speech to Text</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.7.7/axios.min.js"></script>
+</head>
+<body>
+  <button id="recordBtn">Start Recording</button>
+  <p id="status"></p>
+  <p id="result"></p>
+
+  <script>
+    class LiveTranscriber {
+      constructor(segmentMs = 5000) {
+        this.segmentMs = segmentMs;
+        this.recording = false;
+        this.stream = null;
+        this.currentRecorder = null;
+        this.onSegmentText = null; // callback set from outside
+      }
+
+      async start() {
+        this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        this.recording = true;
+        this._startSegment();
+      }
+
+      stop() {
+        this.recording = false;
+        if (this.currentRecorder && this.currentRecorder.state !== 'inactive') {
+          this.currentRecorder.stop(); // fires onstop, but recording=false stops the loop
+        }
+        if (this.stream) {
+          this.stream.getTracks().forEach(track => track.stop());
+        }
+      }
+
+      _startSegment() {
+        if (!this.recording) return;
+
+        this.currentRecorder = new MediaRecorder(this.stream);
+        const segmentChunks = [];
+
+        this.currentRecorder.ondataavailable = e => segmentChunks.push(e.data);
+
+        this.currentRecorder.onstop = () => {
+          const blob = new Blob(segmentChunks, { type: 'audio/webm' });
+          this._uploadSegment(blob); // fire-and-forget
+          this._startSegment(); // chain the next segment immediately
+        };
+
+        this.currentRecorder.start();
+
+        setTimeout(() => {
+          if (this.currentRecorder.state !== 'inactive') this.currentRecorder.stop();
+        }, this.segmentMs);
+      }
+	
+	  // puts the data to paragraph
+      async _uploadSegment(blob) {
+        const formData = new FormData();
+        formData.append('audio', blob, 'segment.webm');
+
+        try {
+          const response = await axios.post('/api/v1/transcribe', formData);
+          if (this.onSegmentText) this.onSegmentText(response.data.text);
+        } catch (err) {
+          console.error('Segment failed:', err.message);
+        }
+      }
+    }
+
+    // ON CLICK
+    const transcriber = new LiveTranscriber();
+    let recording = false;
+	
+	// put the text to p
+    transcriber.onSegmentText = (text) => {
+      document.getElementById('result').textContent += ' ' + text;
+    };
+
+    document.getElementById('recordBtn').onclick = async () => {
+      if (!recording) {
+        recording = true;
+        document.getElementById('recordBtn').textContent = 'Stop Recording';
+        document.getElementById('status').textContent = 'Recording...';
+        document.getElementById('result').textContent = '';
+        await transcriber.start();
+      } else {
+        recording = false;
+        document.getElementById('recordBtn').textContent = 'Start Recording';
+        document.getElementById('status').textContent = '';
+        transcriber.stop();
+      }
+    };
+  </script>
+</body>
+</html>
