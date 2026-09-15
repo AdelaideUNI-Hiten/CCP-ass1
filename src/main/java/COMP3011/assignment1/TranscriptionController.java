@@ -34,6 +34,7 @@ public class TranscriptionController {
             MultipartBodyBuilder body = new MultipartBodyBuilder();
             body.part("file", audio.getResource());
             body.part("model", "gpt-4o-mini-transcribe");
+            body.part("response_format", "json");
 
             TranscriptionResponse result = restClient.post()
                 .contentType(MediaType.MULTIPART_FORM_DATA)
