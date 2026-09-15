@@ -14,7 +14,7 @@ import java.io.IOException;
 
 @RestController
 public class TranscriptionController {
-    @Value("${OPENAI_API_KEY}")
+    @Value("${OPENAI_API_KEY:}")
     private String apiKey;
 
     private final RestTemplate restTemplate = new RestTemplate();
