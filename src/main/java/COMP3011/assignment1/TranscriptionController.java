@@ -9,9 +9,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.util.concurrent.CompletableFuture;
-
 @RestController
 public class TranscriptionController {
 
