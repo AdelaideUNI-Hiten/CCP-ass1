@@ -26,12 +26,8 @@ public class TranscriptionController {
     @PostMapping("/api/v1/transcribe")
     public ResponseEntity<?> transcribe(@RequestParam("audio") MultipartFile audio) {
 
-        // Fail loudly and immediately if the key never made it into the environment,
-        // rather than letting a blank key silently reach OpenAI and fail later.
         if (apiKey == null || apiKey.isBlank()) {
-            System.err.println("OPENAI_API_KEY is not set; cannot call transcription service.");
-            return errorResponse(500, "Internal Server Error",
-                    "The speech-to-text service is not configured correctly.");
+            return errorResponse(500, "Internal Server Error", "The speech-to-text service is not configured correctly.");
         }
 
         try {
@@ -53,22 +49,13 @@ public class TranscriptionController {
             return ResponseEntity.ok(result);
 
         } catch (HttpStatusCodeException ex) {
-            // OpenAI actually responded, but with an error status (bad audio, rate limit, auth, etc.)
-            System.err.println("OpenAI call failed with status " + ex.getStatusCode());
-            return errorResponse(500, "Internal Server Error",
-                    "The speech-to-text service could not process this request.");
+            return errorResponse(500, "Internal Server Error", "The speech-to-text service could not process this request.");
 
         } catch (ResourceAccessException ex) {
-            // Network never connected at all
-            System.err.println("OpenAI call failed: network error - " + ex.getMessage());
-            return errorResponse(500, "Internal Server Error",
-                    "The speech-to-text service is currently unreachable.");
+            return errorResponse(500, "Internal Server Error", "The speech-to-text service is currently unreachable.");
 
         } catch (Exception ex) {
-            // Catch-all so nothing fails silently with a blank frontend
-            System.err.println("Unexpected error during transcription: " + ex.getMessage());
-            return errorResponse(500, "Internal Server Error",
-                    "An unexpected error occurred during transcription.");
+            return errorResponse(500, "Internal Server Error", "An unexpected error occurred during transcription.");
         }
     }
 
