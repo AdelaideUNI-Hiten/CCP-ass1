@@ -1,53 +1,42 @@
 package COMP3011.assignment1;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.http.*;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
+import org.springframework.http.MediaType;
+import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 import org.springframework.web.multipart.MultipartFile;
+
 import java.io.IOException;
 
 @RestController
 public class TranscriptionController {
+
     @Value("${OPENAI_API_KEY:}")
     private String apiKey;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestClient restClient = RestClient.create("https://api.openai.com/v1/audio/transcriptions");
 
     @PostMapping("/api/v1/transcribe")
-    public ResponseEntity<TranscriptionResponse> transcribe(@RequestParam("audio") MultipartFile audioFile) throws IOException {
+    public TranscriptionResponse transcribe(@RequestParam("audio") MultipartFile audio) throws IOException {
+        MultipartBodyBuilder body = new MultipartBodyBuilder();
+        body.part("file", audio.getResource());
+        body.part("model", "gpt-4o-mini-transcribe");
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(apiKey);
-        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+        TranscriptionResponse result = restClient.post()
+            .contentType(MediaType.MULTIPART_FORM_DATA)
+            .headers(headers -> headers.setBearerAuth(apiKey))
+            .body(body.build())
+            .retrieve()
+            .body(TranscriptionResponse.class);
 
-        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-        body.add("file", new ByteArrayResource(audioFile.getBytes()) {
-            @Override
-            public String getFilename() {
-                return audioFile.getOriginalFilename();
-            }
-        });
-        body.add("model", "gpt-4o-mini-transcribe");
-
-        HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
-        ResponseEntity<TranscriptionResponse> response = restTemplate.postForEntity(
-            "https://api.openai.com/v1/audio/transcriptions",
-            requestEntity,
-            TranscriptionResponse.class
-        );
-
-        TranscriptionResponse result = response.getBody();
         if (result != null && result.usage() != null) {
             GlobalStatsController.recordUsage(result.usage().input_tokens(), result.usage().output_tokens());
         }
 
-        return ResponseEntity.ok(result);
+        return result;
     }
 
     public record TranscriptionResponse(String text, Usage usage) {
