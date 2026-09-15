@@ -21,25 +21,22 @@ public class TranscriptionController {
     private final RestClient restClient = RestClient.create("https://api.openai.com/v1/audio/transcriptions");
 
     @PostMapping("/api/v1/transcribe")
-    public CompletableFuture<TranscriptionResponse> transcribe(@RequestParam("audio") MultipartFile audio) throws IOException {
+    public TranscriptionResponse transcribe(@RequestParam("audio") MultipartFile audio) {
         MultipartBodyBuilder body = new MultipartBodyBuilder();
         body.part("file", audio.getResource());
         body.part("model", "gpt-4o-mini-transcribe");
 
-        return CompletableFuture.supplyAsync(() -> {
-            TranscriptionResponse result = restClient.post()
-                .contentType(MediaType.MULTIPART_FORM_DATA)
-                .headers(headers -> headers.setBearerAuth(apiKey))
-                .body(body.build())
-                .retrieve()
-                .body(TranscriptionResponse.class);
+        TranscriptionResponse result = restClient.post()
+            .contentType(MediaType.MULTIPART_FORM_DATA)
+            .headers(h -> h.setBearerAuth(apiKey))
+            .body(body.build())
+            .retrieve()
+            .body(TranscriptionResponse.class);
 
-            if (result != null && result.usage() != null) {
-                GlobalStatsController.recordUsage(result.usage().input_tokens(), result.usage().output_tokens());
-            }
-
-            return result;
-        });
+        if (result != null && result.usage() != null) {
+            GlobalStatsController.recordUsage(result.usage().input_tokens(), result.usage().output_tokens());
+        }
+        return result;
     }
 
     public record TranscriptionResponse(String text, Usage usage) {
