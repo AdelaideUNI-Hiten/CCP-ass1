@@ -1,10 +1,16 @@
 package COMP3011.assignment1;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.MultipartBodyBuilder;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,44 +24,75 @@ import java.time.Instant;
 @RestController
 public class TranscriptionController {
 
-    @Value("${OPENAI_API_KEY:}")
-    private String apiKey;
+    private static final Logger log = LoggerFactory.getLogger(TranscriptionController.class);
+    private static final String MODEL = "gpt-4o-mini-transcribe";
 
-    private final RestClient restClient = RestClient.create("https://api.openai.com/v1/audio/transcriptions");
+    private final RestClient restClient;
+    private final String apiKey;
+
+    public TranscriptionController(RestClient.Builder restClientBuilder,
+                                    @Value("${openai.api.base-url}") String baseUrl,
+                                    @Value("${OPENAI_API_KEY:}") String apiKey) {
+        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+        this.apiKey = apiKey;
+    }
 
     @PostMapping("/api/v1/transcribe")
     public ResponseEntity<?> transcribe(@RequestParam("audio") MultipartFile audio) {
-
-        if (apiKey == null || apiKey.isBlank()) {
-            return errorResponse(500, "Internal Server Error", "The speech-to-text service is not configured correctly.");
-        }
-
         try {
-            MultipartBodyBuilder body = new MultipartBodyBuilder();
-            body.part("file", audio.getResource());
-            body.part("model", "gpt-4o-mini-transcribe");
-            body.part("response_format", "json");
-
-            TranscriptionResponse result = restClient.post()
-                .headers(h -> h.setBearerAuth(apiKey))
-                .body(body.build())
-                .retrieve()
-                .body(TranscriptionResponse.class);
-
-            if (result != null && result.usage() != null) {
-                GlobalStatsController.recordUsage(result.usage().input_tokens(), result.usage().output_tokens());
-            }
-
+            TranscriptionResponse result = callOpenAi(audio);
+            GlobalStatsController.recordUsage(result.usage().input_tokens(), result.usage().output_tokens());
             return ResponseEntity.ok(result);
 
+        } catch (TranscriptionException ex) {
+            log.warn("Transcription failed: {}", ex.getMessage());
+            return errorResponse(500, "Internal Server Error", ex.getMessage());
+        }
+    }
+
+    private TranscriptionResponse callOpenAi(MultipartFile audio) {
+        if (apiKey == null || apiKey.isBlank()) {
+            log.error("OPENAI_API_KEY is not set; cannot call transcription service.");
+            throw new TranscriptionException("The speech-to-text service is not available right now.");
+        }
+
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        body.add("model", MODEL);
+        body.add("response_format", "json");
+        body.add("file", audio.getResource());
+
+        try {
+            long start = System.currentTimeMillis();
+
+            OpenAiTranscriptionResponse parsed = restClient.post()
+                    .uri("/v1/audio/transcriptions")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
+                    .contentType(MediaType.MULTIPART_FORM_DATA)
+                    .body(body)
+                    .retrieve()
+                    .body(OpenAiTranscriptionResponse.class);
+
+            long elapsedMs = System.currentTimeMillis() - start;
+
+            OpenAiTranscriptionResponse.Usage usage = parsed.usage() != null
+                    ? parsed.usage()
+                    : new OpenAiTranscriptionResponse.Usage(0, 0);
+
+            log.info("Transcription succeeded in {} ms (inputTokens={}, outputTokens={})",
+                    elapsedMs, usage.inputTokens(), usage.outputTokens());
+
+            return new TranscriptionResponse(parsed.text(),
+                    new TranscriptionResponse.Usage(usage.inputTokens(), usage.outputTokens()));
+
         } catch (HttpStatusCodeException ex) {
-            return errorResponse(500, "Internal Server Error", "The speech-to-text service could not process this request.");
-
+            HttpStatusCode status = ex.getStatusCode();
+            log.warn("OpenAI transcription call failed with status {}: {}", status, ex.getResponseBodyAsString());
+            throw new TranscriptionException(
+                    "The speech-to-text service could not process this request.", ex);
         } catch (ResourceAccessException ex) {
-            return errorResponse(500, "Internal Server Error", "The speech-to-text service is currently unreachable.");
-
-        } catch (Exception ex) {
-            return errorResponse(500, "Internal Server Error", "An unexpected error occurred during transcription.");
+            log.warn("OpenAI transcription call failed: network error", ex);
+            throw new TranscriptionException(
+                    "The speech-to-text service is currently unreachable.", ex);
         }
     }
 
@@ -65,7 +102,23 @@ public class TranscriptionController {
         ));
     }
 
+    private record OpenAiTranscriptionResponse(String text, Usage usage) {
+        private record Usage(
+                @JsonProperty("input_tokens") long inputTokens,
+                @JsonProperty("output_tokens") long outputTokens) {}
+    }
+
+    private static class TranscriptionException extends RuntimeException {
+        TranscriptionException(String message) {
+            super(message);
+        }
+
+        TranscriptionException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
+
     public record TranscriptionResponse(String text, Usage usage) {
-        public record Usage(String type, long input_tokens, long output_tokens, long total_tokens) {}
+        public record Usage(long input_tokens, long output_tokens) {}
     }
 }
