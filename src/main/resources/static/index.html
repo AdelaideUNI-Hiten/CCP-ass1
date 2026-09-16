@@ -1,13 +1,150 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Speech to Text</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.7.7/axios.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --border: #334155;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(160deg, var(--bg), #1a2236);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: var(--text);
+      padding: 24px;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 420px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px 28px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      margin: 0 0 4px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin: 0 0 28px;
+    }
+
+    #recordBtn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      border: none;
+      border-radius: 999px;
+      padding: 14px 28px;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #fff;
+      background: var(--accent);
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.1s ease;
+    }
+
+    #recordBtn:hover {
+      background: var(--accent-hover);
+    }
+
+    #recordBtn:active {
+      transform: scale(0.97);
+    }
+
+    #recordBtn.recording {
+      background: var(--danger);
+    }
+
+    #recordBtn.recording:hover {
+      background: var(--danger-hover);
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #fff;
+      flex-shrink: 0;
+    }
+
+    #recordBtn.recording .dot {
+      animation: pulse 1.2s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.75); }
+    }
+
+    #status {
+      min-height: 20px;
+      margin: 20px 0 0;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    #result {
+      margin: 12px 0 0;
+      padding: 16px;
+      min-height: 24px;
+      border-radius: 10px;
+      background: #0f172a;
+      border: 1px solid var(--border);
+      font-size: 0.95rem;
+      line-height: 1.5;
+      text-align: left;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    #result:empty {
+      display: none;
+    }
+
+    #result.error {
+      border-color: var(--danger);
+      color: #fca5a5;
+    }
+  </style>
 </head>
 <body>
-  <button id="recordBtn">Start Recording</button>
-  <p id="status"></p>
-  <p id="result"></p>
+  <div class="card">
+    <h1>Speech to Text</h1>
+    <p class="subtitle">Record audio and get an instant transcript</p>
+
+    <button id="recordBtn"><span class="dot"></span><span id="recordBtnLabel">Start Recording</span></button>
+
+    <p id="status"></p>
+    <p id="result"></p>
+  </div>
 
   <script>
     class Recorder {
@@ -55,24 +192,31 @@
     const recorder = new Recorder();
     let recording = false;
 
+    const recordBtn = document.getElementById('recordBtn');
+    const recordBtnLabel = document.getElementById('recordBtnLabel');
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+
     recorder.onResult = (text, error) => {
-      document.getElementById('status').textContent = '';
-      document.getElementById('result').textContent = error
-        ? 'Error: ' + error
-        : text;
+      statusEl.textContent = '';
+      resultEl.classList.toggle('error', !!error);
+      resultEl.textContent = error ? 'Error: ' + error : text;
     };
 
-    document.getElementById('recordBtn').onclick = async () => {
+    recordBtn.onclick = async () => {
       if (!recording) {
         recording = true;
-        document.getElementById('recordBtn').textContent = 'Stop Recording';
-        document.getElementById('status').textContent = 'Recording...';
-        document.getElementById('result').textContent = '';
+        recordBtn.classList.add('recording');
+        recordBtnLabel.textContent = 'Stop Recording';
+        statusEl.textContent = 'Recording...';
+        resultEl.textContent = '';
+        resultEl.classList.remove('error');
         await recorder.start();
       } else {
         recording = false;
-        document.getElementById('recordBtn').textContent = 'Start Recording';
-        document.getElementById('status').textContent = 'Transcribing...';
+        recordBtn.classList.remove('recording');
+        recordBtnLabel.textContent = 'Start Recording';
+        statusEl.textContent = 'Transcribing...';
         recorder.stop();
       }
     };

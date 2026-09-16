@@ -37,7 +37,6 @@ public class TranscriptionController {
             body.part("response_format", "json");
 
             TranscriptionResponse result = restClient.post()
-                .contentType(MediaType.MULTIPART_FORM_DATA)
                 .headers(h -> h.setBearerAuth(apiKey))
                 .body(body.build())
                 .retrieve()
