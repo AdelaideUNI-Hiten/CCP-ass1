@@ -130,3 +130,18 @@ java -jar target/Assignment1-0.0.1-SNAPSHOT.jar
 
 Produces a single executable (fat) jar via `spring-boot-maven-plugin`.
 Serves the page at `http://localhost:8080/`.
+
+## Generative AI usage
+
+Per the assignment's academic integrity guidance, disclosing where
+generative AI (Claude, Anthropic) was used:
+
+- The regression test suite (`OpenAiStubServer`,
+  `TranscriptionControllerIntegrationTest`, `ConcurrencyLoadTest`,
+  `TokenStatsRaceConditionTest`) was written by Claude.
+- This README was written by Claude.
+- Documentation/usage details for the OpenAI transcription API
+  (`https://api.openai.com/v1/audio/transcriptions`, the
+  `gpt-4o-mini-transcribe` model, request/response shape) referenced
+  while building `TranscriptionController` came from Claude rather than
+  OpenAI's own docs directly.
